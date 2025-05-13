@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["FlexibleRazorPayModule"]
+  },
+  "android": {
+    "modules": ["so.vaya.modules.frzp.FlexibleRazorPayModule"]
+  }
+}
