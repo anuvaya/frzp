@@ -1,50 +1,119 @@
 package so.vaya.modules.frzp
 
+
+import android.content.Intent
+import android.util.Log
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
+import com.razorpay.Checkout
+import com.razorpay.CheckoutActivity
+import com.razorpay.ExternalWalletListener
+import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.functions.Queues
+import org.json.JSONObject
 
-class FlexibleRazorPayModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('FlexibleRazorPay')` in JavaScript.
-    Name("FlexibleRazorPay")
+class FlexibleRazorPayModule : Module(), PaymentResultWithDataListener,
+    ExternalWalletListener {
+    private var pendingPromise: Promise? = null
+    private val TAG = "FlexibleRazorPay"
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
+    override fun definition() = ModuleDefinition {
+        Name("FlexibleRazorPay")
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
+        OnActivityResult { activity, payload ->
+            if (payload.requestCode == Checkout.RZP_REQUEST_CODE) {
+                Checkout.handleActivityResult(
+                    activity,
+                    payload.requestCode,
+                    payload.resultCode,
+                    payload.data,
+                    this@FlexibleRazorPayModule,
+                    this@FlexibleRazorPayModule
+                )
+            }
+        }
 
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
+        AsyncFunction("open") { options: Map<String, Any>, promise: Promise ->
+            pendingPromise = promise
+            val currentActivity = appContext.currentActivity
+            Log.d(TAG, "Opening Razorpay checkout with options: $options")
+            try {
+                val optionsJSON = JSONObject(options)
+                val intent = Intent(currentActivity, CheckoutActivity::class.java)
+                intent.putExtra("OPTIONS", optionsJSON.toString());
+                intent.putExtra("FRAMEWORK", "react_native");
+                appContext.throwingActivity.startActivityForResult(
+                    intent,
+                    Checkout.RZP_REQUEST_CODE
+                );
+            } catch (e: Exception) {
+                Log.e(TAG, "Error opening Razorpay checkout: ${e.message}", e)
+                pendingPromise?.reject(CodedException(e))
+                pendingPromise = null
+            }
+        }.runOnQueue(Queues.MAIN)
     }
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
+
+    override fun onExternalWalletSelected(p0: String?, p1: PaymentData?) {
+        TODO("Not yet implemented")
+        print("onExternalWalletSelected")
     }
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(FlexibleRazorPayView::class) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { view: FlexibleRazorPayView, url: URL ->
-        view.webView.loadUrl(url.toString())
-      }
-      // Defines an event that the view can send to JavaScript.
-      Events("onLoad")
+    override fun onPaymentSuccess(paymentId: String?, response: PaymentData?) {
+        val dataJson = response?.data
+        Log.d(TAG, "onPaymentSuccess $response")
+        val dataMap = mutableMapOf<String, Any>()
+
+        if (paymentId != null) {
+            dataMap["razorpay_payment_id"] = paymentId
+        }
+
+        if (dataJson != null) {
+            try {
+                val keys = dataJson.keys()
+
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = dataJson.get(key)
+                    dataMap[key] = value.toString()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing payment data: ${e.message}", e)
+            }
+        }
+
+        pendingPromise?.resolve(dataMap)
+        pendingPromise = null
     }
-  }
+
+    override fun onPaymentError(code: Int, description: String?, response: PaymentData?) {
+        val errorMap = mutableMapOf<String, Any>()
+        errorMap["code"] = code
+        if (description != null) {
+            errorMap["description"] = description
+        }
+
+        val dataJson = response?.data
+        if (dataJson != null) {
+            try {
+                val keys = dataJson.keys()
+
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = dataJson.get(key)
+                    errorMap[key] = value.toString()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing payment error data: ${e.message}", e)
+            }
+        }
+
+        pendingPromise?.reject("ERR_RAZORPAY_PAYMENT", description, Exception(description))
+        pendingPromise = null
+    }
+
 }

@@ -41,3 +41,7 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  implementation 'com.razorpay:checkout:1.6.+'
+}

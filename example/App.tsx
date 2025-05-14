@@ -1,41 +1,31 @@
-import { useEvent } from 'expo';
-import FlexibleRazorPay, { FlexibleRazorPayView } from 'frzp';
-import { Button, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import FlexibleRazorPay, { FlexibleRazorPayView } from "frzp"
+import { Button, SafeAreaView, ScrollView, Text, View } from "react-native"
 
 export default function App() {
-  const onChangePayload = useEvent(FlexibleRazorPay, 'onChange');
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.container}>
-        <Text style={styles.header}>Module API Example</Text>
-        <Group name="Constants">
-          <Text>{FlexibleRazorPay.PI}</Text>
-        </Group>
-        <Group name="Functions">
-          <Text>{FlexibleRazorPay.hello()}</Text>
-        </Group>
         <Group name="Async functions">
           <Button
             title="Set value"
             onPress={async () => {
-              await FlexibleRazorPay.setValueAsync('Hello from JS!');
+              // await FlexibleRazorPay.setValueAsync('Hello from JS!');
+              try {
+                const data = await FlexibleRazorPay.open({
+                  key: "rzp_test_ScKbp9onKbeQ8o",
+                  amount: 100_00,
+                  currency: "INR",
+                })
+                console.log(data)
+              } catch (error) {
+                console.log(error)
+              }
             }}
-          />
-        </Group>
-        <Group name="Events">
-          <Text>{onChangePayload?.value}</Text>
-        </Group>
-        <Group name="Views">
-          <FlexibleRazorPayView
-            url="https://www.example.com"
-            onLoad={({ nativeEvent: { url } }) => console.log(`Loaded: ${url}`)}
-            style={styles.view}
           />
         </Group>
       </ScrollView>
     </SafeAreaView>
-  );
+  )
 }
 
 function Group(props: { name: string; children: React.ReactNode }) {
@@ -44,7 +34,7 @@ function Group(props: { name: string; children: React.ReactNode }) {
       <Text style={styles.groupHeader}>{props.name}</Text>
       {props.children}
     </View>
-  );
+  )
 }
 
 const styles = {
@@ -58,16 +48,16 @@ const styles = {
   },
   group: {
     margin: 20,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 20,
   },
   container: {
     flex: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
   },
   view: {
     flex: 1,
     height: 200,
   },
-};
+}
